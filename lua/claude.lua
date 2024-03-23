@@ -1,8 +1,7 @@
-local M = {}
-
-function M.claude_command(...)
-	local args = table.concat({ ... }, " ")
-	vim.fn.systemlist({ "python3", vim.fn.expand("~/.config/nvim/plugins/claude.nvim/claude.py"), args })
-end
-
-return M
+return {
+	"evangstav/claude.nvim",
+	build = ":UpdateRemotePlugins",
+	config = function()
+		vim.keymap.set("n", "<leader>ep", "<cmd>call ExampleFunction()<CR>", { desc = "Example Python Plugin" })
+	end,
+}

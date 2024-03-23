@@ -11,6 +11,10 @@ class ClaudePlugin:
             api_key=os.environ["ANTHROPIC_API_KEY"],
         )
 
+    @pynvim.function("ExampleFunction", sync=True)
+    def example_function(self, args):
+        self.nvim.current.line = "Hello from the example Python plugin!"
+
     @pynvim.command("Claude", nargs="*", range="", sync=True)
     def claude_command(self, args, range):
         user_input = " ".join(args)
