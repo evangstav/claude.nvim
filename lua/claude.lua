@@ -1,45 +1,69 @@
 local M = {}
 
 local curl = require("plenary.curl")
+
 local conversation_history = {}
 
 function M.setup()
 	-- Plugin setup code goes here
 	-- You can define options, configurations, etc.
+	M.config = vim.tbl_extend("force", {
+		api_key = vim.env.ANTHROPIC_API_KEY,
+		model = "claude-3-opus-20240229",
+		max_tokens = 1024,
+		-- Other configuration options
+	}, opts or {})
 end
 
-local function setup_floating_window()
+local function setup_floating_windows()
 	local width = math.floor(vim.o.columns * 0.8)
-	local height = math.floor(vim.o.lines * 0.8)
-	local borderchars = { "─", "│", "─", "│", "┌", "┐", "┘", "└" }
-
-	local bufh = vim.api.nvim_create_buf(false, true)
-
-	local winnr = vim.api.nvim_open_win(bufh, true, {
+	local height = math.floor(vim.o.lines * 0.7)
+	-- local borderchars = { "│", "─", "─", "┌", "│", "┐", "┘", "└" }
+	local borderchars = { "╔", "═", "╗", "║", "╝", "═", "╚", "║" }
+	local conversation_bufh = vim.api.nvim_create_buf(false, true)
+	local conversation_winnr = vim.api.nvim_open_win(conversation_bufh, true, {
 		relative = "editor",
 		width = width,
-		height = height,
+		height = 1 + height,
 		col = math.floor((vim.o.columns - width) / 2),
-		row = math.floor((vim.o.lines - height) / 2),
+		row = math.floor((vim.o.lines - height) / 2) - 2,
 		style = "minimal",
 		border = borderchars,
 	})
 
-	vim.api.nvim_buf_set_option(bufh, "buftype", "nofile")
-	vim.api.nvim_buf_set_option(bufh, "filetype", "claude")
-	vim.api.nvim_buf_set_option(bufh, "bufhidden", "wipe")
+	local input_bufh = vim.api.nvim_create_buf(false, true)
+	local input_winnr = vim.api.nvim_open_win(input_bufh, true, {
+		relative = "editor",
+		width = width,
+		height = 1,
+		col = math.floor((vim.o.columns - width) / 2),
+		row = math.floor((vim.o.lines - height) / 2) + height,
+		style = "minimal",
+		border = borderchars,
+	})
 
-	return bufh, winnr
+	vim.api.nvim_buf_set_option(conversation_bufh, "buftype", "nofile")
+	vim.api.nvim_buf_set_option(conversation_bufh, "filetype", "claude")
+	vim.api.nvim_buf_set_option(conversation_bufh, "bufhidden", "wipe")
+
+	vim.api.nvim_buf_set_option(input_bufh, "buftype", "nofile")
+	vim.api.nvim_buf_set_option(input_bufh, "filetype", "claude")
+	vim.api.nvim_buf_set_option(input_bufh, "bufhidden", "wipe")
+
+	return conversation_bufh, conversation_winnr, input_bufh, input_winnr
 end
 
 local function display_conversation(bufh)
 	local conversation_text = ""
-
 	for _, entry in ipairs(conversation_history) do
-		conversation_text = conversation_text .. entry.role .. ": " .. entry.content .. "\n\n"
+		local role = entry.role == "user" and "ClaudeUserRole" or "ClaudeAssistantRole"
+		local formatted_entry = string.format("%s: %s", entry.role, entry.content)
+		conversation_text = conversation_text .. formatted_entry .. "\n"
 	end
-
 	vim.api.nvim_buf_set_lines(bufh, 0, -1, false, vim.split(conversation_text, "\n"))
+	-- Apply syntax highlighting
+	vim.api.nvim_buf_add_highlight(bufh, -1, "ClaudeUserRole", 0, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufh, -1, "ClaudeAssistantRole", 1, 0, -1)
 end
 
 local function get_conversation_history()
@@ -107,34 +131,52 @@ local function run_query(bufh, query)
 end
 
 function M.open_conversation_window()
-	local bufh, winnr = setup_floating_window()
-	display_conversation(bufh)
+	local conversation_bufh, conversation_winnr, input_bufh, input_winnr = setup_floating_windows()
+	display_conversation(conversation_bufh)
 
-	local prompt_bufh = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_option(prompt_bufh, "buftype", "prompt")
-	vim.fn.prompt_setprompt(prompt_bufh, "Query: ")
-
-	local prompt_winnr = vim.api.nvim_open_win(prompt_bufh, true, {
-		relative = "editor",
-		width = math.floor(vim.o.columns * 0.8),
-		height = 1,
-		col = (vim.o.columns - vim.o.columns * 0.8) / 2,
-		row = (vim.o.lines - vim.o.lines * 0.8) / 2 + vim.o.lines * 0.8,
-		style = "minimal",
+	vim.api.nvim_buf_set_keymap(input_bufh, "i", "<CR>", "", {
+		noremap = true,
+		callback = function()
+			local query = vim.api.nvim_buf_get_lines(input_bufh, 0, -1, false)[1]
+			vim.api.nvim_buf_set_lines(input_bufh, 0, -1, false, { "" })
+			table.insert(conversation_history, { role = "user", content = query })
+			display_conversation(conversation_bufh)
+			run_query(conversation_bufh, query)
+		end,
 	})
 
-	vim.fn.prompt_setcallback(prompt_bufh, function(query)
-		table.insert(conversation_history, { role = "user", content = query })
-		display_conversation(bufh)
-		run_query(bufh, query)
-	end)
+	vim.api.nvim_buf_set_keymap(input_bufh, "i", "<Esc>", "", {
+		noremap = true,
+		callback = function()
+			vim.api.nvim_win_close(input_winnr, true)
+			vim.api.nvim_win_close(conversation_winnr, true)
+		end,
+	})
 
-	vim.cmd("startinsert")
+	vim.api.nvim_set_current_win(input_winnr)
+	vim.api.nvim_command("startinsert")
 end
 
 vim.api.nvim_create_user_command("ClaudeConversation", function()
 	conversation_history = {}
 	M.open_conversation_window()
 end, {})
+
+-- Custom syntax highlighting
+vim.cmd([[
+    syntax match ClaudeUserRole /^user:/
+    syntax match ClaudeAssistantRole /^assistant:/
+
+    highlight link ClaudeUserRole Keyword
+    highlight link ClaudeAssistantRole Identifier
+]])
+
+-- Enable word wrapping in the conversation window
+vim.cmd([[
+    augroup ClaudeConversation
+        autocmd!
+        autocmd FileType claude setlocal wrap
+    augroup END
+]])
 
 return M
