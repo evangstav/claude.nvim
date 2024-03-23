@@ -1,7 +1,7 @@
 local M = {}
 
 function M.setup()
-	vim.cmd('command! -nargs=* Claude lua require("claude.nvim").claude_command(<f-args>)')
+	vim.cmd('command! -nargs=* Claude lua require("claude").claude_command(<f-args>)')
 end
 
 function M.claude_command(...)
