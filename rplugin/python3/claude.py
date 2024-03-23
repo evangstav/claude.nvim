@@ -24,4 +24,6 @@ class ClaudePlugin:
         # )
         #
         response = "Hello World"
-        self.nvim.command(f"echo '{response}'")
+        # Insert the response into the current buffer
+
+        self.nvim.current.buffer.append(response)
