@@ -13,6 +13,7 @@ class ClaudePlugin:
 
     @pynvim.command("Claude", nargs="*", range="", sync=True)
     def claude_command(self, args, range):
+        self.nvim.out_write("Claude command executed\n")
         # user_input = " ".join(args)
 
         # message = self.client.messages.create(
