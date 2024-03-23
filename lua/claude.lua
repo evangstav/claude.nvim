@@ -6,7 +6,7 @@ end
 
 function M.claude_command(...)
 	local args = table.concat({ ... }, " ")
-	vim.fn.systemlist({ "python3", vim.fn.expand("claude.nvim/lua/claude/claude.py"), args })
+	vim.fn.systemlist({ "python3", vim.fn.stdpath("data") .. "/lazy/claude.nvim/rplugin/python3/claude.py", args })
 end
 
 return M
