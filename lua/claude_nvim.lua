@@ -1,13 +1,12 @@
 local M = {}
 
 function M.setup()
-	vim.cmd([[
-    command! Hello lua require('claude.nvim').hello()
-  ]])
+	vim.cmd('command! -nargs=* Claude lua require("claude.nvim").claude_command(<f-args>)')
 end
 
-function M.hello()
-	vim.fn["hello#hello"]()
+function M.claude_command(...)
+	local args = table.concat({ ... }, " ")
+	vim.fn.systemlist({ "python3", vim.fn.expand("~/.config/nvim/plugins/claude.nvim/lua/claude/claude.py"), args })
 end
 
 return M
