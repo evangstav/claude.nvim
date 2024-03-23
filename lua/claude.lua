@@ -1,7 +1,13 @@
 local M = {}
 
 local curl = require("plenary.curl")
+local pickers = require("telescope.pickers")
+local finders = require("telescope.finders")
+local sorters = require("telescope.sorters")
+local actions = require("telescope.actions")
+local actions_state = require("telescope.actions.state")
 
+local conversation_dir = vim.fn.stdpath("data") .. "/claude_conversations"
 local conversation_history = {}
 
 function M.setup()
@@ -13,6 +19,7 @@ function M.setup()
 		max_tokens = 1024,
 		-- Other configuration options
 	}, opts or {})
+	vim.fn.mkdir(conversation_dir, "p")
 end
 
 local function setup_floating_windows()
@@ -130,6 +137,65 @@ local function run_query(bufh, query)
 	})
 end
 
+local function save_conversation(conversation_name)
+	local file_path = conversation_dir .. "/" .. conversation_name .. ".txt"
+	local file = io.open(file_path, "w")
+	if file then
+		for _, entry in ipairs(conversation_history) do
+			file:write(string.format("%s: %s\n", entry.role, entry.content))
+		end
+		file:close()
+		vim.notify("Conversation saved: " .. conversation_name, vim.log.levels.INFO)
+	else
+		vim.notify("Failed to save conversation: " .. conversation_name, vim.log.levels.ERROR)
+	end
+end
+
+local function load_conversation(conversation_name)
+	local file_path = conversation_dir .. "/" .. conversation_name .. ".txt"
+	local file = io.open(file_path, "r")
+	if file then
+		conversation_history = {}
+		for line in file:lines() do
+			local role, content = line:match("^(%w+):%s*(.*)$")
+			if role and content then
+				table.insert(conversation_history, { role = role, content = content })
+			end
+		end
+		file:close()
+		vim.notify("Conversation loaded: " .. conversation_name, vim.log.levels.INFO)
+	else
+		vim.notify("Conversation not found: " .. conversation_name, vim.log.levels.WARN)
+	end
+end
+
+function M.browse_conversations()
+	local conversations = {}
+	for file in vim.fs.dir(conversation_dir) do
+		if file:sub(-4) == ".txt" then
+			table.insert(conversations, file:sub(1, -5))
+		end
+	end
+	pickers
+		.new({}, {
+			prompt_title = "Select Conversation",
+			finder = finders.new_table({
+				results = conversations,
+			}),
+			sorter = sorters.get_generic_fuzzy_sorter(),
+			attach_mappings = function(prompt_bufnr)
+				actions.select_default:replace(function()
+					local selection = actions_state.get_selected_entry()
+					actions.close(prompt_bufnr)
+					load_conversation(selection[1])
+					M.open_conversation_window()
+				end)
+				return true
+			end,
+		})
+		:find()
+end
+
 function M.open_conversation_window()
 	local conversation_bufh, conversation_winnr, input_bufh, input_winnr = setup_floating_windows()
 	display_conversation(conversation_bufh)
@@ -142,6 +208,17 @@ function M.open_conversation_window()
 			table.insert(conversation_history, { role = "user", content = query })
 			display_conversation(conversation_bufh)
 			run_query(conversation_bufh, query)
+		end,
+	})
+
+	vim.api.nvim_buf_set_keymap(input_bufh, "i", "<C-s>", "", {
+		noremap = true,
+		callback = function()
+			vim.ui.input({ prompt = "Enter conversation name: " }, function(conversation_name)
+				if conversation_name then
+					save_conversation(conversation_name)
+				end
+			end)
 		end,
 	})
 
@@ -160,6 +237,10 @@ end
 vim.api.nvim_create_user_command("ClaudeConversation", function()
 	conversation_history = {}
 	M.open_conversation_window()
+end, {})
+
+vim.api.nvim_create_user_command("ClaudeBrowseConversations", function()
+	M.browse_conversations()
 end, {})
 
 -- Custom syntax highlighting
