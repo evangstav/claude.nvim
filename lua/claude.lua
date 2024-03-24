@@ -151,7 +151,7 @@ local function make_request(callback, additional_context)
 end
 
 local function run_query(bufh, query, additional_context)
-	table.insert(conversation_history, { role = "user", content = query })
+	table.insert(conversation_history, { role = "user", content = query .. "\n" })
 	display_conversation(bufh)
 
 	make_request(function(response)
@@ -297,7 +297,7 @@ end
 
 vim.api.nvim_create_user_command("ClaudeConversation", function()
 	conversation_history = {}
-	M.open_conversation_window()
+	M.open_conversation_window("")
 end, {})
 
 vim.api.nvim_create_user_command("ClaudeBrowseConversations", function()
