@@ -9,8 +9,6 @@ local actions_state = require("telescope.actions.state")
 
 local conversation_dir = vim.fn.stdpath("data") .. "/claude_conversations"
 local conversation_history = {}
-local system_prompt =
-	"You will be acting as my general AI assistant, helping me explore topics in coding, math, philosophy, logic, psychology, and data science"
 
 function M.setup()
 	-- Plugin setup code goes here
@@ -19,6 +17,7 @@ function M.setup()
 		api_key = vim.env.ANTHROPIC_API_KEY,
 		model = "claude-3-haiku-20240307",
 		max_tokens = 1024,
+		system_prompt = "You will be acting as my general AI assistant, helping me explore topics in coding, math, philosophy, logic, psychology, and data science",
 		-- Other configuration options
 	}, opts or {})
 	vim.fn.mkdir(conversation_dir, "p")
@@ -103,7 +102,7 @@ local function make_request(callback)
 	local data = {
 		model = M.config.model,
 		max_tokens = M.config.max_tokens,
-		system = system_prompt,
+		system = M.config.system_prompt,
 		messages = conversation_history,
 	}
 	local json_data = vim.json.encode(data)
@@ -162,6 +161,16 @@ local function load_conversation(conversation_name)
 	end
 end
 
+local function delete_conversation(conversation_name)
+	local file_path = conversation_dir .. "/" .. conversation_name .. ".txt"
+	local success, err = os.remove(file_path)
+	if success then
+		vim.notify("Conversation deleted: " .. conversation_name, vim.log.levels.INFO)
+	else
+		vim.notify("Failed to delete conversation: " .. conversation_name, vim.log.levels.ERROR)
+	end
+end
+
 function M.browse_conversations()
 	local conversations = {}
 	for file in vim.fs.dir(conversation_dir) do
@@ -176,12 +185,18 @@ function M.browse_conversations()
 				results = conversations,
 			}),
 			sorter = sorters.get_generic_fuzzy_sorter(),
-			attach_mappings = function(prompt_bufnr)
-				actions.select_default:replace(function()
+			attach_mappings = function(prompt_bufnr, map)
+				map("i", "<CR>", function()
 					local selection = actions_state.get_selected_entry()
 					actions.close(prompt_bufnr)
 					load_conversation(selection[1])
 					M.open_conversation_window()
+				end)
+				map("i", "<C-d>", function()
+					local selection = actions_state.get_selected_entry()
+					actions.close(prompt_bufnr)
+					delete_conversation(selection[1])
+					M.browse_conversations()
 				end)
 				return true
 			end,
