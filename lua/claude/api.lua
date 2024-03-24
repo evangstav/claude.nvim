@@ -28,6 +28,7 @@ function M.make_request(callback, additional_context)
 	end
 
 	local system_prompt_with_context = config.config.system_prompt .. "Additional context: \n\n" .. additional_context
+	print(system_prompt_with_context)
 	local url = "https://api.anthropic.com/v1/messages"
 	local headers = {
 		["x-api-key"] = api_key,

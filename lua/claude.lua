@@ -12,8 +12,6 @@ local keymaps = require("claude.keymaps")
 local floating_windows = require("claude.floating_windows")
 local config = require("claude.config")
 
-conversation.reset_history()
-
 function M.setup(opts)
 	config.setup(opts)
 end
@@ -70,7 +68,7 @@ function M.open_conversation_window(additional_context)
 end
 
 vim.api.nvim_create_user_command("ClaudeConversation", function()
-	conversation.history = {}
+	conversation.reset_history()
 	M.open_conversation_window("")
 end, {})
 
@@ -80,13 +78,13 @@ end, {})
 
 vim.api.nvim_create_user_command("ClaudeConversationWithCurrentFile", function()
 	local current_file_content = utils.get_current_file_content()
-	conversation.history = {}
+	conversation.reset_history()
 	M.open_conversation_window(current_file_content)
 end, {})
 
 vim.api.nvim_create_user_command("ClaudeConversationWithProjectFiles", function()
 	local project_files_content = utils.get_project_files_content()
-	conversation.history = {}
+	conversation.reset_history()
 	M.open_conversation_window(project_files_content)
 end, {})
 
