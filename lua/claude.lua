@@ -111,21 +111,23 @@ local function make_request(callback)
 	curl.post(url, {
 		body = json_data,
 		headers = headers,
-		callback = callback,
+		callback = vim.schedule_wrap(function(response)
+			callback(response)
+		end),
 	})
 end
 
 local function run_query(bufh, query)
-	make_request(
-		query,
-		vim.schedule_wrap(function(response)
-			if response.status ~= 200 then
-				vim.api.nvim_err_writeln("Error: " .. response.body)
-			else
-				handle_response(bufh, response.body)
-			end
-		end)
-	)
+	table.insert(conversation_history, { role = "user", content = query })
+	display_conversation(bufh)
+
+	make_request(function(response)
+		if response.status ~= 200 then
+			vim.api.nvim_err_writeln("Error: " .. response.body)
+		else
+			handle_response(bufh, response.body)
+		end
+	end)
 end
 
 local function save_conversation(conversation_name)
@@ -196,7 +198,6 @@ function M.open_conversation_window()
 		callback = function()
 			local query = vim.api.nvim_buf_get_lines(input_bufh, 0, -1, false)[1]
 			vim.api.nvim_buf_set_lines(input_bufh, 0, -1, false, { "" })
-			table.insert(conversation_history, { role = "user", content = query })
 			display_conversation(conversation_bufh)
 			run_query(conversation_bufh, query)
 		end,
