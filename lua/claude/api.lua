@@ -1,10 +1,25 @@
 -- api.lua
 local curl = require("plenary.curl")
 local conversation = require("claude.conversation")
+local config = require("claude.config")
 
 local M = {}
 
-function M.make_request(config, query, callback, additional_context)
+function M.run_query(bufh, query, additional_context)
+	conversation.add_to_history("user", query .. "\n")
+	conversation.display(bufh)
+
+	M.make_request(function(response)
+		if response.status ~= 200 then
+			vim.api.nvim_err_writeln("Error: " .. response.body)
+		else
+			M.handle_response(bufh, response.body)
+		end
+	end, additional_context)
+	conversation.display(bufh)
+end
+
+function M.make_request(callback, additional_context)
 	-- Prepare the API request and make the request using curl
 	local api_key = vim.env.ANTHROPIC_API_KEY
 	if not api_key then
@@ -12,9 +27,7 @@ function M.make_request(config, query, callback, additional_context)
 		return
 	end
 
-	table.insert(conversation.history, { role = "user", content = query .. "\n" })
-
-	local system_prompt_with_context = config.system_prompt .. "Additional context: \n\n" .. additional_context
+	local system_prompt_with_context = config.config.system_prompt .. "Additional context: \n\n" .. additional_context
 	local url = "https://api.anthropic.com/v1/messages"
 	local headers = {
 		["x-api-key"] = api_key,
@@ -23,8 +36,8 @@ function M.make_request(config, query, callback, additional_context)
 	}
 
 	local data = {
-		model = config.model,
-		max_tokens = config.max_tokens,
+		model = config.config.model,
+		max_tokens = config.config.max_tokens,
 		system = system_prompt_with_context,
 		messages = conversation.history,
 	}
