@@ -22,13 +22,4 @@ function M.get_project_files_content()
 	return table.concat(project_files, "\n")
 end
 
-function M.display_loading_indicator(bufh)
-	local loading_text = "Loading..."
-	vim.api.nvim_buf_set_lines(bufh, -1, -1, false, { loading_text })
-end
-
-function M.clear_loading_indicator(bufh)
-	vim.api.nvim_buf_set_lines(bufh, -1, -1, false, {})
-end
-
 return M
