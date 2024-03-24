@@ -9,13 +9,15 @@ local actions_state = require("telescope.actions.state")
 
 local conversation_dir = vim.fn.stdpath("data") .. "/claude_conversations"
 local conversation_history = {}
+local system_prompt =
+	"You will be acting as my general AI assistant, helping me explore topics in coding, math, philosophy, logic, psychology, and data science"
 
 function M.setup()
 	-- Plugin setup code goes here
 	-- You can define options, configurations, etc.
 	M.config = vim.tbl_extend("force", {
 		api_key = vim.env.ANTHROPIC_API_KEY,
-		model = "claude-3-opus-20240229",
+		model = "claude-3-haiku-20240307",
 		max_tokens = 1024,
 		-- Other configuration options
 	}, opts or {})
@@ -63,7 +65,6 @@ end
 local function display_conversation(bufh)
 	local conversation_text = ""
 	for _, entry in ipairs(conversation_history) do
-		local role = entry.role == "user" and "ClaudeUserRole" or "ClaudeAssistantRole"
 		local formatted_entry = string.format("%s: %s", entry.role, entry.content)
 		conversation_text = conversation_text .. formatted_entry .. "\n"
 	end
@@ -71,16 +72,6 @@ local function display_conversation(bufh)
 	-- Apply syntax highlighting
 	vim.api.nvim_buf_add_highlight(bufh, -1, "ClaudeUserRole", 0, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufh, -1, "ClaudeAssistantRole", 1, 0, -1)
-end
-
-local function get_conversation_history()
-	local history = ""
-
-	for _, entry in ipairs(conversation_history) do
-		history = history .. entry.role .. ": " .. entry.content .. "\n"
-	end
-
-	return history
 end
 
 local function handle_response(bufh, response_body)
@@ -95,7 +86,7 @@ local function handle_response(bufh, response_body)
 	display_conversation(bufh)
 end
 
-local function run_query(bufh, query)
+local function make_request(callback)
 	local api_key = vim.env.ANTHROPIC_API_KEY
 	if not api_key then
 		vim.api.nvim_err_writeln("ANTHROPIC_API_KEY environment variable is not set.")
@@ -104,37 +95,37 @@ local function run_query(bufh, query)
 
 	local url = "https://api.anthropic.com/v1/messages"
 	local headers = {
-		["x-api-key"] = api_key,
+		["x-api-key"] = M.config.api_key,
 		["anthropic-version"] = "2023-06-01",
 		["content-type"] = "application/json",
 	}
 
-	local conversation_history_text = get_conversation_history()
 	local data = {
-		model = "claude-3-opus-20240229",
-		max_tokens = 1024,
-		system = conversation_history_text,
-		messages = {
-			{
-				role = "user",
-				content = query,
-			},
-		},
+		model = M.config.model,
+		max_tokens = M.config.max_tokens,
+		system = system_prompt,
+		messages = conversation_history,
 	}
-
 	local json_data = vim.json.encode(data)
 
 	curl.post(url, {
 		body = json_data,
 		headers = headers,
-		callback = vim.schedule_wrap(function(response)
+		callback = callback,
+	})
+end
+
+local function run_query(bufh, query)
+	make_request(
+		query,
+		vim.schedule_wrap(function(response)
 			if response.status ~= 200 then
 				vim.api.nvim_err_writeln("Error: " .. response.body)
 			else
 				handle_response(bufh, response.body)
 			end
-		end),
-	})
+		end)
+	)
 end
 
 local function save_conversation(conversation_name)
